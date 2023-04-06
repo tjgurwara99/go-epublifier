@@ -123,23 +123,11 @@ func onlyBody(w io.Writer, n *html.Node) error {
 	return nil
 }
 
-func removeFirefoxReaderExtraChild(n *html.Node) {
-	for child := n.FirstChild; child != nil; child = child.NextSibling {
-		if child.Type == html.ElementNode {
-			if child.Data == "section" {
-				child.RemoveChild(child.LastChild)
-			}
-		}
-		removeFirefoxReaderExtraChild(child)
-	}
-}
-
 func DefaultChapterSanitiser(a readability.Article) (readability.Article, error) {
 	node, err := html.Parse(strings.NewReader(a.Content))
 	if err != nil {
 		return a, fmt.Errorf("failed to parse html: %w", err)
 	}
-	removeFirefoxReaderExtraChild(node)
 	buf := bytes.Buffer{}
 	err = onlyBody(&buf, node)
 	if err != nil {

@@ -2,16 +2,20 @@ package epublifier
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"path"
 	"strings"
 
 	"github.com/bmaupin/go-epub"
+	"github.com/chromedp/cdproto/dom"
+	"github.com/chromedp/chromedp"
 	"github.com/go-shiori/go-readability"
 	"golang.org/x/net/html"
 )
@@ -24,6 +28,7 @@ type Epublifier struct {
 	URLIterator       func() string
 	ChapterSanitiser  func(readability.Article) (readability.Article, error)
 	SavePath          string
+	RequiresJS        bool
 }
 
 type EpublifierError string
@@ -137,6 +142,34 @@ func DefaultChapterSanitiser(a readability.Article) (readability.Article, error)
 	return a, nil
 }
 
+func makeRequest(url string) (io.Reader, error) {
+	var res string
+	options := []chromedp.ExecAllocatorOption{
+		chromedp.Headless,
+		chromedp.UserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"),
+	}
+	ctx, cancel := chromedp.NewExecAllocator(context.Background(), options...)
+	defer cancel()
+	ctx, cancel = chromedp.NewContext(ctx)
+	defer cancel()
+	defer chromedp.Cancel(ctx)
+	err := chromedp.Run(ctx, chromedp.Tasks{
+		chromedp.Navigate(url),
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			node, err := dom.GetDocument().Do(ctx)
+			if err != nil {
+				return err
+			}
+			res, err = dom.GetOuterHTML().WithNodeID(node.NodeID).Do(ctx)
+			return err
+		}),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to make request: %w", err)
+	}
+	return strings.NewReader(res), nil
+}
+
 func (e *Epublifier) Create() error {
 	err := e.validate()
 	if err != nil {
@@ -149,6 +182,22 @@ func (e *Epublifier) Create() error {
 	if err != nil {
 		return err
 	}
+
+	if e.RequiresJS {
+		for url := e.URLIterator(); url != ""; url = e.URLIterator() {
+			// if the request failed, try again with a headless browser
+			req, err := makeRequest(url)
+			if err != nil {
+				return fmt.Errorf("failed to make request: %w", err)
+			}
+			err = e.addToBook(book, req, url)
+			if err != nil {
+				return fmt.Errorf("failed to add to book: %w", err)
+			}
+		}
+		return book.Write(e.SavePath)
+	}
+
 	for url := e.URLIterator(); url != ""; url = e.URLIterator() {
 		req, err := http.NewRequest(http.MethodGet, url, nil)
 		if err != nil {
@@ -158,21 +207,33 @@ func (e *Epublifier) Create() error {
 		req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_7_5) AppleWebKit/537.11 (KHTML, like Gecko) Chrome/23.0.1271.64 Safari/537.11")
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
-			log.Fatal(err)
+			return fmt.Errorf("failed to make request: %w", err)
 		}
 		defer resp.Body.Close()
-		chapter, err := readability.FromReader(resp.Body, resp.Request.URL)
+		err = e.addToBook(book, resp.Body, url)
 		if err != nil {
-			return fmt.Errorf("failed to find readerview on the provided url: %w", err)
+			return fmt.Errorf("failed to add to book: %w", err)
 		}
-		if e.ChapterSanitiser == nil {
-			e.ChapterSanitiser = DefaultChapterSanitiser
-		}
-		chapter, err = e.ChapterSanitiser(chapter)
-		if err != nil {
-			return fmt.Errorf("failed to sanitise chapter: %w", err)
-		}
-		book.AddSection(chapter.Content, chapter.Title, strings.ToLower(strings.ReplaceAll(chapter.Title, " ", "-")), "")
 	}
 	return book.Write(e.SavePath)
+}
+
+func (e *Epublifier) addToBook(book *epub.Epub, reader io.Reader, urll string) error {
+	u, err := url.Parse(urll)
+	if err != nil {
+		return fmt.Errorf("failed to parse url: %w", err)
+	}
+	chapter, err := readability.FromReader(reader, u)
+	if err != nil {
+		return fmt.Errorf("failed to find readerview on the provided url: %w", err)
+	}
+	if e.ChapterSanitiser == nil {
+		e.ChapterSanitiser = DefaultChapterSanitiser
+	}
+	chapter, err = e.ChapterSanitiser(chapter)
+	if err != nil {
+		return fmt.Errorf("failed to sanitise chapter: %w", err)
+	}
+	book.AddSection(chapter.Content, chapter.Title, strings.ToLower(strings.ReplaceAll(chapter.Title, " ", "-")), "")
+	return nil
 }

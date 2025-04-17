@@ -1,12 +1,14 @@
 module github.com/tjgurwara99/go-epublifier
 
 go 1.23
+toolchain go1.24.1
+
 require (
 	github.com/bmaupin/go-epub v1.0.1
 	github.com/chromedp/cdproto v0.0.0-20241022234722-4d5d5faf59fb
 	github.com/chromedp/chromedp v0.11.2
 	github.com/go-shiori/go-readability v0.0.0-20220215145315-dd6828d2f09b
-	golang.org/x/net v0.36.0
+	golang.org/x/net v0.38.0
 )
 
 require (
@@ -24,6 +26,6 @@ require (
 	github.com/sirupsen/logrus v1.8.1 // indirect
 	github.com/stretchr/testify v1.9.0 // indirect
 	github.com/vincent-petithory/dataurl v0.0.0-20191104211930-d1553a71de50 // indirect
-	golang.org/x/sys v0.30.0 // indirect
-	golang.org/x/text v0.22.0 // indirect
+	golang.org/x/sys v0.31.0 // indirect
+	golang.org/x/text v0.23.0 // indirect
 )

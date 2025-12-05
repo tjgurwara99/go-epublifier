@@ -1,6 +1,7 @@
 module github.com/tjgurwara99/go-epublifier
 
-go 1.23
+go 1.23.0
+
 toolchain go1.24.1
 
 require (
@@ -23,7 +24,7 @@ require (
 	github.com/gogs/chardet v0.0.0-20191104214054-4b6791f73a28 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
-	github.com/sirupsen/logrus v1.8.1 // indirect
+	github.com/sirupsen/logrus v1.8.3 // indirect
 	github.com/stretchr/testify v1.9.0 // indirect
 	github.com/vincent-petithory/dataurl v0.0.0-20191104211930-d1553a71de50 // indirect
 	golang.org/x/sys v0.31.0 // indirect
